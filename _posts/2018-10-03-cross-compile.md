@@ -1,6 +1,8 @@
 ---
 layout: default
 title: "Cross Compiling wiringPi on Mac OSX using Docker"
+date: 2018-10-03T09:00:00Z
+tags: ["wiringpi","arm","osx"]
 ---
 
 # Cross Compiling wiringPi on Mac OSX using Docker
@@ -18,14 +20,16 @@ Create a lib structure
 
 `mkdir -p usr/local/bin usr/local/lib usr/local/include usr/lib`
 
-A big problem is that ldconfig attempts to load the cache with x86 libs & not the Arm ones. I'm no expert on this so if someone has a nicer way of doing it please let e know,  anyway to get around this:
+Even though we use the pitools version of ldconfig it still looks in /etc/ld.so.conf.d for the
+libraries to cache. These are the Ubuntu x86 libs of the host os & not the Arm ones. 
+I'm no expert on this so if someone has a nicer way of doing it please let me know, but here's a quick fudge (as the container dies anyway after the build exits):
 
 Create a file libcross.conf with contents:
 /build/usr/local/lib
 
 In the ./build script add near the beginning:
 
-```
+```bash
 rm /etc/ld.so.conf.d/*.conf 
 cp ./libcross.conf /etc/ld.so.conf.d/
 ```
@@ -34,7 +38,7 @@ This temporarily removes all the x86 libraries from the cache & points ldconfig 
 
 Patch the build file to setup ld.so.conf & remove references to sudo as not needed here: (To patch save the diff to a file & use patch ./build <diff file>
 
-```
+```bash
 46c46,47
 < sudo=${WIRINGPI_SUDO-sudo}
 ---
@@ -90,7 +94,7 @@ Patch the following MakeFiles:
 
 wiringPi MakeFile diff:
 
-```
+```bash
 25c25
 < DESTDIR?=/usr
 ---
@@ -108,7 +112,7 @@ wiringPi MakeFile diff:
 
 GPIO MakeFile:
 
-```
+```bash
 26c26
 < DESTDIR?=/usr
 ---
@@ -121,7 +125,7 @@ GPIO MakeFile:
 
 devLib MakeFile:
 
-```
+```bash
 25c25
 < DESTDIR?=/usr
 ---
@@ -141,7 +145,9 @@ devLib MakeFile:
 
 Start the compilation:
 
-```docker run -it -v <insert path to your build directory here>:/build mitchallen/pi-cross-compile ./build```
+```bash
+docker run -it -v <insert path to your build directory here>:/build mitchallen/pi-cross-compile ./build
+```
 
 use 'build clean' to cleanup if required
 That will map the wiring dir to /build in the container & run the build script
@@ -155,12 +161,12 @@ So now we've built the wiringPi libs & gpio it's time to try & build one of the 
 
 Again, we edit the examples/MakeFile to point to the cross compiler & give it access to the headers in our build dir.
 
-```
+```bash
 CC = /pitools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin/arm-linux-gnueabihf-gcc
 INCLUDE	= -I. -I../usr/local/include
 ```
 Now add a quick & dirty build script (call it build-examples) to your build directory (the same one with 'build' in it)
-```
+```bash
 #!/bin/sh -e
 
 rm /etc/ld.so.conf.d/*.conf 
@@ -171,5 +177,7 @@ make clean
 make really-all
 ```
 
-All done so run:
-```docker run -it -v `pwd`:/build mitchallen/pi-cross-compile ./build-examples```
+Remember to chmod +x ./build-script then:
+```bash
+docker run -it -v `pwd`:/build mitchallen/pi-cross-compile ./build-examples
+```
